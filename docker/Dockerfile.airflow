@@ -1,0 +1,12 @@
+# Dockerfile personnalisé pour Airflow avec nos dépendances
+FROM apache/airflow:2.8.0-python3.10
+
+# Installer nos packages Python
+USER airflow
+RUN pip install --no-cache-dir \
+    requests \
+    pandas \
+    pyarrow \
+    sqlalchemy \
+    psycopg2-binary \
+    loguru
