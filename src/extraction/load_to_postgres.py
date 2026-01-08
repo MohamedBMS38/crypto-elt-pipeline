@@ -4,6 +4,7 @@ Module pour charger les données Parquet dans PostgreSQL.
 Ce script lit les fichiers Parquet et les insère dans la base de données.
 """
 
+import os
 import pandas as pd
 from pathlib import Path
 from sqlalchemy import create_engine
@@ -15,13 +16,13 @@ from loguru import logger
 # =============================================================================
 
 # Paramètres de connexion PostgreSQL
-# En production, ces valeurs viendraient de variables d'environnement
+# Utilise les variables d'environnement (Docker) ou valeurs par défaut (local)
 DB_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "crypto_db",
-    "user": "crypto_user",
-    "password": "crypto_pass",
+    "host": os.getenv("CRYPTO_DB_HOST", "localhost"),
+    "port": int(os.getenv("CRYPTO_DB_PORT", 5432)),
+    "database": os.getenv("CRYPTO_DB_NAME", "crypto_db"),
+    "user": os.getenv("CRYPTO_DB_USER", "crypto_user"),
+    "password": os.getenv("CRYPTO_DB_PASSWORD", "crypto_pass"),
 }
 
 # Construction de l'URL de connexion SQLAlchemy
