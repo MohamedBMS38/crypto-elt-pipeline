@@ -8,8 +8,13 @@ Ce script orchestre l'extraction complète :
 
 Usage:
     python -m src.extraction.extract_crypto_data
+
+Configuration via variables d'environnement :
+    CRYPTO_NB_CRYPTOS   : Nombre de cryptos à extraire (défaut: 20)
+    CRYPTO_HISTORY_DAYS : Nombre de jours d'historique (défaut: 365)
 """
 
+import os
 import time
 import pandas as pd
 from loguru import logger
@@ -27,14 +32,14 @@ from src.extraction.save_to_parquet import (
 
 
 # =============================================================================
-# CONFIGURATION
+# CONFIGURATION (via variables d'environnement)
 # =============================================================================
 
-# Nombre de cryptos à extraire
-NB_CRYPTOS = 20
+# Nombre de cryptos à extraire (défaut: 20 pour production)
+NB_CRYPTOS = int(os.getenv('CRYPTO_NB_CRYPTOS', 20))
 
-# Nombre de jours d'historique
-HISTORY_DAYS = 365  # 1 an
+# Nombre de jours d'historique (défaut: 365 pour 1 an)
+HISTORY_DAYS = int(os.getenv('CRYPTO_HISTORY_DAYS', 365))
 
 
 # =============================================================================
@@ -122,12 +127,21 @@ if __name__ == "__main__":
 
     Il ne s'exécute PAS quand on importe le module :
         from src.extraction.extract_crypto_data import extract_all_cryptos
-    """
-    # Lancer l'extraction
-    # Pour tester, on extrait seulement 3 cryptos sur 7 jours
-    # En production, utiliser les valeurs par défaut (20 cryptos, 365 jours)
 
-    files = extract_all_cryptos(nb_cryptos=3, days=7)
+    La configuration est lue depuis les variables d'environnement :
+        CRYPTO_NB_CRYPTOS   : Nombre de cryptos (défaut: 20)
+        CRYPTO_HISTORY_DAYS : Jours d'historique (défaut: 365)
+
+    Exemples:
+        # Mode dev (rapide)
+        set CRYPTO_NB_CRYPTOS=5 && set CRYPTO_HISTORY_DAYS=7 && python -m src.extraction.extract_crypto_data
+
+        # Mode prod (complet)
+        python -m src.extraction.extract_crypto_data
+    """
+    print(f"Configuration: {NB_CRYPTOS} cryptos, {HISTORY_DAYS} jours")
+
+    files = extract_all_cryptos()  # Utilise NB_CRYPTOS et HISTORY_DAYS par défaut
 
     print("\nFichiers crees:")
     for f in files:

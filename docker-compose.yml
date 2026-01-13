@@ -15,12 +15,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    # Variables pour nos scripts
+    # Variables pour nos scripts - Base de données
     CRYPTO_DB_HOST: postgres
     CRYPTO_DB_PORT: 5432
     CRYPTO_DB_NAME: crypto_db
     CRYPTO_DB_USER: crypto_user
     CRYPTO_DB_PASSWORD: crypto_pass
+    # Variables pour l'extraction - Configuration
+    # Mode DEV: 5 cryptos, 7 jours (rapide pour développer)
+    # Mode PROD: 20 cryptos, 365 jours (données complètes)
+    CRYPTO_NB_CRYPTOS: 5        # Nombre de cryptos à extraire
+    CRYPTO_HISTORY_DAYS: 7      # Nombre de jours d'historique
   volumes:
     - ./dags:/opt/airflow/dags                # Nos DAGs
     - ./src:/opt/airflow/src                  # Nos scripts Python

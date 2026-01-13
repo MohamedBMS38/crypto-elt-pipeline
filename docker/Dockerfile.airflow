@@ -1,12 +1,32 @@
 # Dockerfile personnalisé pour Airflow avec nos dépendances
 FROM apache/airflow:2.8.0-python3.10
 
-# Installer nos packages Python
+# =============================================================================
+# Installation de Java (requis pour Spark)
+# =============================================================================
+# On passe en root pour installer des packages système
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        openjdk-17-jre-headless \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Variable d'environnement pour que Spark trouve Java
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# =============================================================================
+# Installation des packages Python
+# =============================================================================
+# On repasse en user airflow pour pip install
 USER airflow
+
 RUN pip install --no-cache-dir \
     requests \
     pandas \
     pyarrow \
     sqlalchemy \
     psycopg2-binary \
-    loguru
+    loguru \
+    pyspark>=3.5.0

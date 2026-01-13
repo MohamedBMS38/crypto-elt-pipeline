@@ -1,9 +1,10 @@
 """
-DAG Airflow pour l'extraction des données crypto.
+DAG Airflow pour le pipeline crypto complet.
 
-Ce DAG orchestre le pipeline complet :
+Ce DAG orchestre le pipeline ELT :
 1. Extraction des données CoinGecko -> Parquet
 2. Chargement des données Parquet -> PostgreSQL
+3. Transformation Spark (OHLC, moyennes mobiles, variations)
 
 Schedule: Quotidien à 6h du matin
 """
@@ -11,21 +12,19 @@ Schedule: Quotidien à 6h du matin
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.bash import BashOperator
 
 
 # =============================================================================
 # CONFIGURATION DU DAG
 # =============================================================================
 
-# Arguments par défaut pour toutes les tâches
 default_args = {
-    'owner': 'crypto_pipeline',           # Propriétaire du DAG
-    'depends_on_past': False,             # Ne dépend pas des runs précédents
-    'email_on_failure': False,            # Pas d'email en cas d'échec
-    'email_on_retry': False,              # Pas d'email en cas de retry
-    'retries': 1,                         # Nombre de tentatives en cas d'échec
-    'retry_delay': timedelta(minutes=5),  # Délai entre les tentatives
+    'owner': 'crypto_pipeline',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
 }
 
 
@@ -36,15 +35,23 @@ default_args = {
 def extract_crypto_data():
     """
     Tâche 1: Extraire les données CoinGecko et sauvegarder en Parquet.
+
+    Configuration via variables d'environnement :
+    - CRYPTO_NB_CRYPTOS : Nombre de cryptos (défaut: 5)
+    - CRYPTO_HISTORY_DAYS : Jours d'historique (défaut: 7)
     """
+    import os
     import sys
     sys.path.insert(0, '/opt/airflow')
 
     from src.extraction.extract_crypto_data import extract_all_cryptos
 
-    # Extraire 5 cryptos sur 7 jours (pour les tests)
-    # En production: extract_all_cryptos(nb_cryptos=20, days=365)
-    files = extract_all_cryptos(nb_cryptos=5, days=7)
+    nb_cryptos = int(os.getenv('CRYPTO_NB_CRYPTOS', 5))
+    history_days = int(os.getenv('CRYPTO_HISTORY_DAYS', 7))
+
+    print(f"Configuration: {nb_cryptos} cryptos, {history_days} jours d'historique")
+
+    files = extract_all_cryptos(nb_cryptos=nb_cryptos, days=history_days)
 
     print(f"Fichiers créés: {files}")
     return files
@@ -65,18 +72,43 @@ def load_to_postgres():
     return rows
 
 
+def transform_with_spark():
+    """
+    Tâche 3: Transformer les données avec Spark.
+
+    Transformations appliquées :
+    - Agrégation journalière (OHLC)
+    - Moyennes mobiles (7j, 30j)
+    - Variations de prix (1j, 7j)
+    - Volatilité (7j)
+
+    Les données transformées sont sauvegardées dans data/processed/
+    """
+    import sys
+    sys.path.insert(0, '/opt/airflow')
+
+    from src.processing.transform_prices import run_transformations
+
+    print("Lancement des transformations Spark...")
+
+    files = run_transformations()
+
+    print(f"Transformations terminées. Fichiers créés: {files}")
+    return files
+
+
 # =============================================================================
 # DÉFINITION DU DAG
 # =============================================================================
 
 with DAG(
-    dag_id='crypto_extraction_pipeline',      # Identifiant unique du DAG
+    dag_id='crypto_extraction_pipeline',
     default_args=default_args,
-    description='Pipeline extraction crypto CoinGecko -> PostgreSQL',
-    schedule_interval='0 6 * * *',            # Cron: tous les jours à 6h
-    start_date=datetime(2026, 1, 1),          # Date de début
-    catchup=False,                            # Ne pas exécuter les runs passés
-    tags=['crypto', 'extraction', 'etl'],     # Tags pour filtrer dans l'UI
+    description='Pipeline ELT crypto: CoinGecko -> PostgreSQL -> Spark',
+    schedule_interval='0 6 * * *',
+    start_date=datetime(2026, 1, 1),
+    catchup=False,
+    tags=['crypto', 'extraction', 'etl', 'spark'],
 ) as dag:
 
     # =========================================================================
@@ -96,7 +128,15 @@ with DAG(
     )
 
     # =========================================================================
-    # DÉFINITION DE L'ORDRE D'EXÉCUTION
+    # TÂCHE 3: Transformations Spark
     # =========================================================================
-    # task_extract doit finir AVANT task_load
-    task_extract >> task_load
+    task_transform = PythonOperator(
+        task_id='transform_with_spark',
+        python_callable=transform_with_spark,
+    )
+
+    # =========================================================================
+    # ORDRE D'EXÉCUTION
+    # =========================================================================
+    # Extract -> Load -> Transform
+    task_extract >> task_load >> task_transform
